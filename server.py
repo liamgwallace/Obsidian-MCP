@@ -89,5 +89,5 @@ if __name__ == "__main__":
     logger.info(f"Whitelist enabled: {config.whitelist_enabled}")
     logger.info(f"Port: {config.mcp_port}")
 
-    # Run with SSE transport on configured port
-    mcp.run(transport="sse", host="0.0.0.0", port=config.mcp_port)
+    # Run with streamable HTTP transport
+    mcp.run(transport="streamable-http", host="0.0.0.0", port=config.mcp_port)
