@@ -233,9 +233,17 @@ curl -H "Authorization: Bearer your-secret-token" http://localhost:8080/messages
 
 All commands execute within the vault directory. The server validates that operations cannot escape the vault path.
 
-## Health Check
+## Endpoints
 
-The server provides a health check endpoint at `/health`:
+The server exposes these endpoints:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Health check - returns vault status |
+| `/sse` | GET | SSE endpoint for MCP client connection |
+| `/messages/` | POST | Message endpoint for MCP communication |
+
+### Health Check
 
 ```bash
 curl http://localhost:8080/health
@@ -255,6 +263,16 @@ Response:
   "auth_enabled": false
 }
 ```
+
+### n8n MCP Client Configuration
+
+To connect from n8n's MCP Client node:
+
+| Setting | Value |
+|---------|-------|
+| **Endpoint** | `http://your-server:8080/sse` |
+| **Server Transport** | `SSE` |
+| **Authentication** | None (or Bearer token if enabled) |
 
 ## Docker Image
 
