@@ -24,9 +24,3 @@ services:
       - MAX_OUTPUT_SIZE=${MAX_OUTPUT_SIZE:-100000}
       - WHITELIST_ENABLED=${WHITELIST_ENABLED:-true}
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 5s
