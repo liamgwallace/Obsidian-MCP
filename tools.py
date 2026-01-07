@@ -76,9 +76,23 @@ async def execute_bash_command(vault_name: str, command: str) -> dict:
     # Check whitelist if enabled
     if config.whitelist_enabled:
         if not whitelist_manager.is_allowed(command):
+            # Extract the base command that was blocked
+            base_command = shlex.split(command)[0] if command else ""
+            base_command = Path(base_command).name
+
+            # Get sorted list of allowed commands for helpful error message
+            allowed_commands = sorted(whitelist_manager.commands)
+            commands_list = ", ".join(allowed_commands)
+
+            error_msg = (
+                f"Command '{base_command}' is not whitelisted.\n\n"
+                f"Allowed commands ({len(allowed_commands)} total):\n{commands_list}\n\n"
+                f"To disable whitelist checking, set WHITELIST_ENABLED=false in your environment."
+            )
+
             return {
                 "output": "",
-                "error": f"Command not whitelisted. Enable WHITELIST_ENABLED=false to disable whitelist.",
+                "error": error_msg,
                 "success": False,
                 "truncated": False
             }
