@@ -30,7 +30,7 @@ mcp = FastMCP("obsidian-mcp")
 
 
 @mcp.tool()
-def list_vaults() -> str:
+def list_vaults(**kwargs) -> str:
     """List all available Obsidian vaults."""
     vaults = config.vaults
     if not vaults:
@@ -43,7 +43,7 @@ def list_vaults() -> str:
 
 
 @mcp.tool()
-async def execute_bash(vault: str, command: str) -> str:
+async def execute_bash(vault: str, command: str, **kwargs) -> str:
     """Execute a bash command in an Obsidian vault directory.
 
     Args:
@@ -67,7 +67,7 @@ async def execute_bash(vault: str, command: str) -> str:
 
 
 @mcp.tool()
-async def get_tree(vault: str, include_files: bool = True) -> str:
+async def get_tree(vault: str, include_files: bool = True, **kwargs) -> str:
     """Get directory tree structure of an Obsidian vault.
 
     Args:
