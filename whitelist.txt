@@ -1,0 +1,44 @@
+# Whitelisted commands for Obsidian MCP Server
+# One command per line. Lines starting with # are comments.
+# Only the command name is checked, flags/arguments are allowed.
+
+# File viewing
+cat
+less
+more
+head
+tail
+
+# File searching
+grep
+find
+locate
+
+# Directory listing
+ls
+tree
+
+# File operations
+mkdir
+touch
+cp
+mv
+rm
+rmdir
+
+# Text processing
+sed
+awk
+cut
+sort
+uniq
+tr
+wc
+
+# Other utilities
+echo
+pwd
+basename
+dirname
+stat
+file

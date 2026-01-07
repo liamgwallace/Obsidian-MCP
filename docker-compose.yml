@@ -1,0 +1,39 @@
+version: '3.8'
+
+services:
+  obsidian-mcp:
+    build: .
+    image: ghcr.io/${GITHUB_REPOSITORY:-owner/obsidian-mcp}:latest
+    container_name: obsidian-mcp
+    ports:
+      - "${MCP_PORT:-8080}:8080"
+    volumes:
+      # Mount vault directories (configure these in .env)
+      # Example: ./my-vault:/vaults/personal:ro
+      - ${VAULT_MOUNT_1}
+      - ${VAULT_MOUNT_2:-/dev/null:/dev/null}
+      - ${VAULT_MOUNT_3:-/dev/null:/dev/null}
+      # Mount logs directory
+      - ./logs:/app/logs
+      # Optional: mount custom whitelist
+      - ./whitelist.txt:/app/whitelist.txt:ro
+    env_file:
+      - .env
+    environment:
+      - VAULTS=${VAULTS}
+      - MCP_PORT=8080
+      - MCP_AUTH_ENABLED=${MCP_AUTH_ENABLED:-false}
+      - MCP_AUTH_TOKEN=${MCP_AUTH_TOKEN}
+      - COMMAND_TIMEOUT=${COMMAND_TIMEOUT:-30}
+      - MAX_OUTPUT_SIZE=${MAX_OUTPUT_SIZE:-100000}
+      - WHITELIST_ENABLED=${WHITELIST_ENABLED:-true}
+      - WHITELIST_PATH=${WHITELIST_PATH:-whitelist.txt}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - LOG_PATH=${LOG_PATH:-logs/obsidian-mcp.log}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
