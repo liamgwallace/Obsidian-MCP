@@ -8,15 +8,23 @@ less
 more
 head
 tail
+batcat
+bat
 
 # File searching
 grep
 find
 locate
+rg
+ag
+fd
+fzf
 
 # Directory listing
 ls
 tree
+du
+df
 
 # File operations
 mkdir
@@ -25,6 +33,11 @@ cp
 mv
 rm
 rmdir
+ln
+chmod
+chown
+rsync
+install
 
 # Text processing
 sed
@@ -34,11 +47,114 @@ sort
 uniq
 tr
 wc
+join
+paste
+comm
+diff
+patch
+split
+csplit
+fold
+fmt
+nl
+tac
+rev
+column
+expand
+unexpand
 
-# Other utilities
-echo
-pwd
+# String manipulation
+expr
+printf
+test
+[
+[[
+
+# Date and time
+date
+cal
+
+# Archive and compression
+tar
+zip
+unzip
+gzip
+gunzip
+bzip2
+bunzip2
+xz
+unxz
+7z
+
+# File content analysis
+file
+stat
+md5sum
+sha1sum
+sha256sum
+sha512sum
+cmp
+xxd
+hexdump
+od
+strings
+
+# Path manipulation
 basename
 dirname
-stat
-file
+realpath
+readlink
+
+# Process and system
+xargs
+tee
+which
+type
+command
+
+# Output and formatting
+echo
+pwd
+env
+printenv
+seq
+yes
+true
+false
+
+# JSON/YAML processing
+jq
+yq
+
+# CSV processing
+csvkit
+csvtool
+miller
+
+# Image processing for attachments
+identify
+convert
+mogrify
+exiftool
+
+# PDF operations
+pdfgrep
+pdftotext
+pdftk
+qpdf
+
+# Markdown specific
+pandoc
+mdcat
+glow
+
+# Variable and math operations
+bc
+dc
+let
+
+# Loop and control helpers
+while
+for
+if
+case
