@@ -5,8 +5,8 @@ A Model Context Protocol (MCP) server for executing bash commands within Obsidia
 ## Features
 
 - Execute bash commands within Obsidian vault directories
-- Auto-discovery of vaults from root directories
-- Support for multiple vault root locations
+- Auto-discovery of vaults from root directory
+- List available vaults via MCP tool
 - Configurable command whitelist for security
 - Command timeout and output size limits
 - Optional API token authentication
@@ -31,15 +31,15 @@ cp .env.example .env
 
 3. Organize your vaults in a directory structure:
 ```
-/home/liam/docker/obsidian/vaults/
+/home/user/obsidian-vaults/
 ├── personal-vault/
 ├── work-vault/
 └── notes/
 ```
 
-4. Edit `.env` to point to your vault root:
+4. Edit `.env` to set your vault path:
 ```env
-VAULT_ROOTS=["/home/liam/docker/obsidian/vaults"]
+VAULT_PATH=/home/user/obsidian-vaults
 ```
 
 The server will automatically discover all subdirectories as individual vaults (`personal-vault`, `work-vault`, `notes`).
@@ -61,7 +61,10 @@ curl http://localhost:8080/health
 pip install -r requirements.txt
 ```
 
-2. Create `.env` file as shown above
+2. Set `VAULT_ROOT` environment variable to point to your vaults directory:
+```bash
+export VAULT_ROOT=/home/user/obsidian-vaults
+```
 
 3. Run the server:
 ```bash
@@ -70,29 +73,31 @@ python server.py
 
 ## Configuration
 
-All configuration is done via environment variables in the `.env` file:
+All configuration is done via environment variables in the `.env` file.
 
 ### Vault Configuration
 
-The server auto-discovers vaults from root directories. Each subdirectory becomes a separate vault.
+The server auto-discovers vaults from a root directory. Each subdirectory becomes a separate vault.
 
 ```env
-# Single vault root
-VAULT_ROOTS=["/home/liam/docker/obsidian/vaults"]
-
-# Multiple vault roots
-VAULT_ROOTS=["/home/liam/docker/obsidian/vaults", "/mnt/backup/vaults"]
+# Path to your vaults directory on the HOST machine
+VAULT_PATH=/home/user/obsidian-vaults
 ```
 
 **Example directory structure:**
 ```
-/home/liam/docker/obsidian/vaults/
+/home/user/obsidian-vaults/
 ├── personal/      → vault name: "personal"
 ├── work/          → vault name: "work"
 └── projects/      → vault name: "projects"
 ```
 
 **Note:** Hidden directories (starting with `.`) are ignored.
+
+**How it works with Docker:**
+- `VAULT_PATH` is your host machine path (set in `.env`)
+- docker-compose mounts this to `/vaults` inside the container
+- The server reads from `/vaults` (via `VAULT_ROOT` env var set in docker-compose)
 
 ### Server Configuration
 
@@ -130,6 +135,20 @@ LOG_LEVEL=INFO
 ```
 
 ## MCP Tools
+
+### list_vaults
+
+List all available Obsidian vaults.
+
+**Parameters:** None
+
+**Example:**
+```json
+{}
+```
+
+**Returns:**
+- List of vault names
 
 ### execute_bash
 
@@ -228,7 +247,7 @@ Response:
   "status": "healthy",
   "vaults": {
     "personal": {
-      "path": "/path/to/vault",
+      "path": "/vaults/personal",
       "accessible": true
     }
   },
@@ -257,6 +276,7 @@ docker pull ghcr.io/liamgwallace/obsidian-mcp:latest
 
 ### Running locally:
 ```bash
+export VAULT_ROOT=/path/to/your/vaults
 python server.py
 ```
 
@@ -308,15 +328,15 @@ docker-compose logs obsidian-mcp
 ```
 
 Common issues:
-- Invalid JSON in `VAULT_ROOTS` environment variable
-- Vault root paths don't exist or aren't accessible
-- No subdirectories found in vault roots (check directory structure)
+- `VAULT_PATH` not set in `.env` file
+- Vault path doesn't exist or isn't accessible
+- No subdirectories found in vault root (check directory structure)
 - Port already in use
 
 ### Commands failing
 
 - Check if command is whitelisted in `whitelist.txt`
-- Verify vault name is correct
+- Verify vault name is correct (use `list_vaults` tool)
 - Check command timeout setting if commands are slow
 - Review logs for detailed error messages
 

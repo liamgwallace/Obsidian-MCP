@@ -43,6 +43,15 @@ async def list_tools() -> list[Tool]:
 
     return [
         Tool(
+            name="list_vaults",
+            description="List all available Obsidian vaults",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        ),
+        Tool(
             name="execute_bash",
             description=f"Execute a bash command in an Obsidian vault directory. Available vaults: {vault_list}",
             inputSchema={
@@ -87,7 +96,20 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     logger.info(f"Tool called: {name} with arguments: {arguments}")
 
     try:
-        if name == "execute_bash":
+        if name == "list_vaults":
+            config = get_config()
+            vaults = config.vaults
+
+            if not vaults:
+                return [TextContent(type="text", text="No vaults found")]
+
+            lines = ["Available vaults:", ""]
+            for vault_name in sorted(vaults.keys()):
+                lines.append(f"  - {vault_name}")
+
+            return [TextContent(type="text", text="\n".join(lines))]
+
+        elif name == "execute_bash":
             vault = arguments.get("vault")
             command = arguments.get("command")
 
