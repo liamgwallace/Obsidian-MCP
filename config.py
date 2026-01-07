@@ -15,23 +15,42 @@ class Config:
 
     def __init__(self):
         """Initialize configuration from environment variables."""
-        # Multiple vaults configuration
-        vaults_str = os.getenv('VAULTS', '{}')
+        # Vault roots configuration - auto-discover vaults from root directories
+        vault_roots_str = os.getenv('VAULT_ROOTS', '["/home/liam/docker/obsidian/vaults"]')
         try:
-            self.vaults: Dict[str, str] = json.loads(vaults_str)
+            vault_roots = json.loads(vault_roots_str)
+            if isinstance(vault_roots, str):
+                vault_roots = [vault_roots]
+            elif not isinstance(vault_roots, list):
+                raise ValueError("VAULT_ROOTS must be a JSON array of paths or a single path string")
         except json.JSONDecodeError:
-            raise ValueError("VAULTS must be a valid JSON object mapping vault names to paths")
+            raise ValueError("VAULT_ROOTS must be a valid JSON array of paths")
+
+        # Auto-discover vaults from root directories
+        self.vaults: Dict[str, str] = {}
+        for root in vault_roots:
+            root_path = Path(root)
+            if not root_path.exists():
+                logging.warning(f"Vault root does not exist: {root}")
+                continue
+            if not root_path.is_dir():
+                logging.warning(f"Vault root is not a directory: {root}")
+                continue
+
+            # Scan for subdirectories (each is a vault)
+            try:
+                for item in root_path.iterdir():
+                    if item.is_dir() and not item.name.startswith('.'):
+                        vault_name = item.name
+                        # Handle duplicate names by appending parent dir
+                        if vault_name in self.vaults:
+                            vault_name = f"{root_path.name}-{vault_name}"
+                        self.vaults[vault_name] = str(item.resolve())
+            except PermissionError:
+                logging.warning(f"Permission denied accessing vault root: {root}")
 
         if not self.vaults:
-            raise ValueError("At least one vault must be configured in VAULTS")
-
-        # Validate vault paths exist
-        for name, path in self.vaults.items():
-            vault_path = Path(path)
-            if not vault_path.exists():
-                raise ValueError(f"Vault path does not exist: {path} (vault: {name})")
-            if not vault_path.is_dir():
-                raise ValueError(f"Vault path is not a directory: {path} (vault: {name})")
+            raise ValueError("No vaults found. Check VAULT_ROOTS configuration and ensure directories exist.")
 
         # MCP Server settings
         self.mcp_port = int(os.getenv('MCP_PORT', '8080'))

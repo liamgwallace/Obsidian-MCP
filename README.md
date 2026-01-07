@@ -5,7 +5,8 @@ A Model Context Protocol (MCP) server for executing bash commands within Obsidia
 ## Features
 
 - Execute bash commands within Obsidian vault directories
-- Support for multiple vaults
+- Auto-discovery of vaults from root directories
+- Support for multiple vault root locations
 - Configurable command whitelist for security
 - Command timeout and output size limits
 - Optional API token authentication
@@ -19,7 +20,7 @@ A Model Context Protocol (MCP) server for executing bash commands within Obsidia
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/yourusername/obsidian-mcp.git
+git clone https://github.com/liamgwallace/obsidian-mcp.git
 cd obsidian-mcp
 ```
 
@@ -28,19 +29,27 @@ cd obsidian-mcp
 cp .env.example .env
 ```
 
-3. Edit `.env` and configure your vaults:
-```env
-VAULTS={"personal": "/path/to/your/vault", "work": "/path/to/work/vault"}
-VAULT_MOUNT_1=./my-vault:/vaults/personal:ro
-MCP_PORT=8080
+3. Organize your vaults in a directory structure:
+```
+/home/liam/docker/obsidian/vaults/
+├── personal-vault/
+├── work-vault/
+└── notes/
 ```
 
-4. Start the server:
+4. Edit `.env` to point to your vault root:
+```env
+VAULT_ROOTS=["/home/liam/docker/obsidian/vaults"]
+```
+
+The server will automatically discover all subdirectories as individual vaults (`personal-vault`, `work-vault`, `notes`).
+
+5. Start the server:
 ```bash
 docker-compose up -d
 ```
 
-5. Check health:
+6. Check health:
 ```bash
 curl http://localhost:8080/health
 ```
@@ -65,14 +74,25 @@ All configuration is done via environment variables in the `.env` file:
 
 ### Vault Configuration
 
-```env
-# JSON object mapping vault names to paths
-VAULTS={"personal": "/home/user/Documents/PersonalVault", "work": "/home/user/Documents/WorkVault"}
+The server auto-discovers vaults from root directories. Each subdirectory becomes a separate vault.
 
-# Docker volume mounts (for Docker deployment)
-VAULT_MOUNT_1=./my-vault:/vaults/personal:ro
-VAULT_MOUNT_2=./work-vault:/vaults/work:ro
+```env
+# Single vault root
+VAULT_ROOTS=["/home/liam/docker/obsidian/vaults"]
+
+# Multiple vault roots
+VAULT_ROOTS=["/home/liam/docker/obsidian/vaults", "/mnt/backup/vaults"]
 ```
+
+**Example directory structure:**
+```
+/home/liam/docker/obsidian/vaults/
+├── personal/      → vault name: "personal"
+├── work/          → vault name: "work"
+└── projects/      → vault name: "projects"
+```
+
+**Note:** Hidden directories (starting with `.`) are ignored.
 
 ### Server Configuration
 
@@ -90,27 +110,23 @@ MCP_AUTH_TOKEN=your-secret-token-here
 ### Command Execution
 
 ```env
-# Command timeout in seconds
+# Command timeout in seconds (default: 30)
 COMMAND_TIMEOUT=30
 
-# Maximum output size in characters
+# Maximum output size in characters (default: 100000)
 MAX_OUTPUT_SIZE=100000
 
-# Enable command whitelist (true/false)
+# Enable command whitelist (default: true)
 WHITELIST_ENABLED=true
-
-# Path to whitelist file
-WHITELIST_PATH=whitelist.txt
 ```
 
 ### Logging
 
-```env
-# Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL
-LOG_LEVEL=INFO
+Logs are written to stdout and `logs/obsidian-mcp.log` by default. Configure log level if needed:
 
-# Path to log file
-LOG_PATH=logs/obsidian-mcp.log
+```env
+# Log level: DEBUG, INFO, WARNING, ERROR, CRITICAL (default: INFO)
+LOG_LEVEL=INFO
 ```
 
 ## MCP Tools
@@ -227,14 +243,15 @@ Docker images are automatically built and pushed to GitHub Container Registry on
 
 ### Pull the latest image:
 ```bash
-docker pull ghcr.io/yourusername/obsidian-mcp:latest
+docker pull ghcr.io/liamgwallace/obsidian-mcp:latest
 ```
 
 ### Available tags:
 - `latest`: Latest build from main branch
 - `main`: Latest build from main branch
-- `v*`: Semantic version tags (e.g., v1.0.0)
+- `pr-*`: Pull request builds
 - `sha-*`: Specific commit builds
+- `v*`: Semantic version tags (e.g., v1.0.0)
 
 ## Development
 
@@ -273,11 +290,10 @@ Comments start with `#`. Only the command name is checked - all flags and argume
 
 ## Logging
 
-Logs are written to both the console and the configured log file. Configure log level and path in `.env`:
+Logs are written to both stdout and `logs/obsidian-mcp.log`. Configure log level in `.env`:
 
 ```env
 LOG_LEVEL=INFO
-LOG_PATH=logs/obsidian-mcp.log
 ```
 
 The logs directory is created automatically if it doesn't exist.
@@ -292,8 +308,9 @@ docker-compose logs obsidian-mcp
 ```
 
 Common issues:
-- Invalid JSON in `VAULTS` environment variable
-- Vault paths don't exist or aren't accessible
+- Invalid JSON in `VAULT_ROOTS` environment variable
+- Vault root paths don't exist or aren't accessible
+- No subdirectories found in vault roots (check directory structure)
 - Port already in use
 
 ### Commands failing
