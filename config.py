@@ -1,7 +1,6 @@
 """Configuration management for Obsidian MCP Server."""
 
 import os
-import json
 import logging
 from pathlib import Path
 from typing import Dict, Optional
@@ -15,42 +14,28 @@ class Config:
 
     def __init__(self):
         """Initialize configuration from environment variables."""
-        # Vault roots configuration - auto-discover vaults from root directories
-        vault_roots_str = os.getenv('VAULT_ROOTS', '["/home/liam/docker/obsidian/vaults"]')
-        try:
-            vault_roots = json.loads(vault_roots_str)
-            if isinstance(vault_roots, str):
-                vault_roots = [vault_roots]
-            elif not isinstance(vault_roots, list):
-                raise ValueError("VAULT_ROOTS must be a JSON array of paths or a single path string")
-        except json.JSONDecodeError:
-            raise ValueError("VAULT_ROOTS must be a valid JSON array of paths")
+        # Vault root configuration - the container path where vaults are mounted
+        # In Docker, host path is mounted to /vaults in the container
+        self.vault_root = os.getenv('VAULT_ROOT', '/vaults')
 
-        # Auto-discover vaults from root directories
+        root_path = Path(self.vault_root)
+        if not root_path.exists():
+            raise ValueError(f"Vault root does not exist: {self.vault_root}")
+        if not root_path.is_dir():
+            raise ValueError(f"Vault root is not a directory: {self.vault_root}")
+
+        # Auto-discover vaults from root directory (each subdirectory is a vault)
         self.vaults: Dict[str, str] = {}
-        for root in vault_roots:
-            root_path = Path(root)
-            if not root_path.exists():
-                logging.warning(f"Vault root does not exist: {root}")
-                continue
-            if not root_path.is_dir():
-                logging.warning(f"Vault root is not a directory: {root}")
-                continue
-
-            # Scan for subdirectories (each is a vault)
-            try:
-                for item in root_path.iterdir():
-                    if item.is_dir() and not item.name.startswith('.'):
-                        vault_name = item.name
-                        # Handle duplicate names by appending parent dir
-                        if vault_name in self.vaults:
-                            vault_name = f"{root_path.name}-{vault_name}"
-                        self.vaults[vault_name] = str(item.resolve())
-            except PermissionError:
-                logging.warning(f"Permission denied accessing vault root: {root}")
+        try:
+            for item in root_path.iterdir():
+                if item.is_dir() and not item.name.startswith('.'):
+                    vault_name = item.name
+                    self.vaults[vault_name] = str(item.resolve())
+        except PermissionError:
+            raise ValueError(f"Permission denied accessing vault root: {self.vault_root}")
 
         if not self.vaults:
-            raise ValueError("No vaults found. Check VAULT_ROOTS configuration and ensure directories exist.")
+            raise ValueError(f"No vaults found in {self.vault_root}. Ensure subdirectories exist.")
 
         # MCP Server settings
         self.mcp_port = int(os.getenv('MCP_PORT', '8080'))

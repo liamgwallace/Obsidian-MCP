@@ -7,15 +7,16 @@ services:
     ports:
       - "${MCP_PORT:-8080}:8080"
     volumes:
-      # Mount your vault root directory
-      # Default: /home/liam/docker/obsidian/vaults
-      - /home/liam/docker/obsidian/vaults:/home/liam/docker/obsidian/vaults:ro
+      # Mount your vault directory from host to /vaults in container
+      # Set VAULT_PATH in .env to your host vault directory
+      - ${VAULT_PATH:?VAULT_PATH must be set in .env}:/vaults:ro
       # Optional: mount custom whitelist
       # - ./whitelist.txt:/app/whitelist.txt:ro
     env_file:
       - .env
     environment:
-      - VAULT_ROOTS=${VAULT_ROOTS:-["/home/liam/docker/obsidian/vaults"]}
+      # Container path where vaults are mounted (do not change)
+      - VAULT_ROOT=/vaults
       - MCP_PORT=8080
       - MCP_AUTH_ENABLED=${MCP_AUTH_ENABLED:-false}
       - MCP_AUTH_TOKEN=${MCP_AUTH_TOKEN}
