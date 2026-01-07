@@ -212,16 +212,21 @@ async def health_check(request: Request) -> JSONResponse:
 
 def create_app() -> Starlette:
     """Create and configure the Starlette application."""
-    # Create SSE transport
-    sse = SseServerTransport("/messages/")
+    # Create SSE transport - messages go to /sse for simplicity
+    sse = SseServerTransport("/sse")
 
     async def handle_sse(request: Request):
-        """Handle SSE connections."""
+        """Handle SSE connections (GET) and messages (POST)."""
         # Check auth
         if not check_auth(request):
             logger.warning(f"Unauthorized access attempt from {request.client.host}")
             return JSONResponse({"error": "Unauthorized"}, status_code=401)
 
+        # Handle POST requests (messages from client)
+        if request.method == "POST":
+            return await sse.handle_post_message(request.scope, request.receive, request._send)
+
+        # Handle GET requests (SSE stream)
         async with sse.connect_sse(
             request.scope,
             request.receive,
@@ -233,13 +238,12 @@ def create_app() -> Starlette:
                 mcp_server.create_initialization_options()
             )
 
-    # Create Starlette app with routes
+    # Create Starlette app with routes - simplified to single /sse endpoint
     app = Starlette(
         debug=False,
         routes=[
             Route("/health", endpoint=health_check, methods=["GET"]),
-            Route("/sse", endpoint=handle_sse, methods=["GET"]),
-            Mount("/messages/", app=sse.handle_post_message),
+            Route("/sse", endpoint=handle_sse, methods=["GET", "POST"]),
         ],
     )
 
@@ -270,8 +274,7 @@ def main():
 
         logger.info(f"Server running on http://0.0.0.0:{config.mcp_port}")
         logger.info("Health check available at /health")
-        logger.info("SSE endpoint available at /sse")
-        logger.info("Messages endpoint available at /messages/")
+        logger.info("SSE endpoint available at /sse (GET for stream, POST for messages)")
 
         uvicorn.run(app, host="0.0.0.0", port=config.mcp_port, log_level="info")
 
