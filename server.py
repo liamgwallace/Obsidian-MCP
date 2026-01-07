@@ -1,13 +1,19 @@
 """Obsidian MCP Server - Execute bash commands in Obsidian vaults."""
 
-import asyncio
+import json
 import logging
 import sys
 from pathlib import Path
-from aiohttp import web
 from mcp.server import Server
 from mcp.server.sse import SseServerTransport
 from mcp.types import Tool, TextContent
+from starlette.applications import Starlette
+from starlette.middleware import Middleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
+from starlette.routing import Mount, Route
+import uvicorn
 from config import init_config, get_config
 from tools import init_whitelist, execute_bash_command, get_vault_tree
 
@@ -162,7 +168,8 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
             text=f"Error executing tool: {str(e)}"
         )]
 
-async def health_check(request):
+
+async def health_check(request: Request) -> JSONResponse:
     """Health check endpoint."""
     config = get_config()
 
@@ -182,90 +189,79 @@ async def health_check(request):
 
     status_code = 200 if all_healthy else 503
 
-    return web.json_response({
+    return JSONResponse({
         "status": "healthy" if all_healthy else "unhealthy",
         "vaults": vault_status,
         "whitelist_enabled": config.whitelist_enabled,
         "auth_enabled": config.mcp_auth_enabled
-    }, status=status_code)
+    }, status_code=status_code)
 
-@web.middleware
-async def auth_middleware(request, handler):
+
+class AuthMiddleware(BaseHTTPMiddleware):
     """Authentication middleware for MCP endpoints."""
+
+    async def dispatch(self, request: Request, call_next):
+        config = get_config()
+
+        # Skip auth for health check
+        if request.url.path == "/health":
+            return await call_next(request)
+
+        # Check if auth is enabled
+        if not config.mcp_auth_enabled:
+            return await call_next(request)
+
+        # Validate authorization header
+        auth_header = request.headers.get("Authorization", "")
+
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+            if token == config.mcp_auth_token:
+                return await call_next(request)
+
+        logger.warning(f"Unauthorized access attempt from {request.client.host}")
+        return JSONResponse(
+            {"error": "Unauthorized"},
+            status_code=401
+        )
+
+
+def create_app() -> Starlette:
+    """Create and configure the Starlette application."""
     config = get_config()
-
-    # Skip auth for health check
-    if request.path == "/health":
-        return await handler(request)
-
-    # Check if auth is enabled
-    if not config.mcp_auth_enabled:
-        return await handler(request)
-
-    # Validate authorization header
-    auth_header = request.headers.get("Authorization", "")
-
-    if auth_header.startswith("Bearer "):
-        token = auth_header[7:]
-        if token == config.mcp_auth_token:
-            return await handler(request)
-
-    logger.warning(f"Unauthorized access attempt from {request.remote}")
-    return web.json_response(
-        {"error": "Unauthorized"},
-        status=401
-    )
-
-async def run_server():
-    """Run the MCP server with SSE transport."""
-    config = get_config()
-    logger.info("Starting Obsidian MCP Server")
-    logger.info(f"Configured vaults: {', '.join(config.list_vaults())}")
-    logger.info(f"Whitelist enabled: {config.whitelist_enabled}")
-    logger.info(f"Auth enabled: {config.mcp_auth_enabled}")
-    logger.info(f"Port: {config.mcp_port}")
-
-    # Create aiohttp application
-    app = web.Application(middlewares=[auth_middleware])
-
-    # Add health check endpoint
-    app.router.add_get("/health", health_check)
 
     # Create SSE transport
-    sse = SseServerTransport("/messages")
+    sse = SseServerTransport("/messages/")
 
-    async def handle_sse(request):
+    async def handle_sse(request: Request) -> Response:
         """Handle SSE connections."""
         async with sse.connect_sse(
-            request.headers.get("content-type", ""),
-            lambda: request.content.iter_any()
+            request.scope,
+            request.receive,
+            request._send
         ) as streams:
             await mcp_server.run(
                 streams[0],
                 streams[1],
                 mcp_server.create_initialization_options()
             )
+        return Response()
 
-    # Add SSE endpoint
-    app.router.add_post("/messages", handle_sse)
+    # Create Starlette app with routes
+    app = Starlette(
+        debug=False,
+        routes=[
+            Route("/health", endpoint=health_check, methods=["GET"]),
+            Route("/sse", endpoint=handle_sse, methods=["GET"]),
+            Mount("/messages/", app=sse.handle_post_message),
+        ],
+        middleware=[
+            Middleware(AuthMiddleware)
+        ]
+    )
 
-    # Run the web server
-    runner = web.AppRunner(app)
-    await runner.setup()
-    site = web.TCPSite(runner, "0.0.0.0", config.mcp_port)
-    await site.start()
+    return app
 
-    logger.info(f"Server running on http://0.0.0.0:{config.mcp_port}")
-    logger.info("Health check available at /health")
-    logger.info("MCP endpoint available at /messages")
-
-    # Keep server running
-    try:
-        await asyncio.Event().wait()
-    except KeyboardInterrupt:
-        logger.info("Shutting down server...")
-    finally:
-        await runner.cleanup()
 
 def main():
     """Main entry point."""
@@ -280,8 +276,21 @@ def main():
         # Initialize whitelist
         init_whitelist()
 
-        # Run server
-        asyncio.run(run_server())
+        logger.info("Starting Obsidian MCP Server")
+        logger.info(f"Configured vaults: {', '.join(config.list_vaults())}")
+        logger.info(f"Whitelist enabled: {config.whitelist_enabled}")
+        logger.info(f"Auth enabled: {config.mcp_auth_enabled}")
+        logger.info(f"Port: {config.mcp_port}")
+
+        # Create and run the app
+        app = create_app()
+
+        logger.info(f"Server running on http://0.0.0.0:{config.mcp_port}")
+        logger.info("Health check available at /health")
+        logger.info("SSE endpoint available at /sse")
+        logger.info("Messages endpoint available at /messages/")
+
+        uvicorn.run(app, host="0.0.0.0", port=config.mcp_port, log_level="info")
 
     except Exception as e:
         print(f"Failed to start server: {e}", file=sys.stderr)
