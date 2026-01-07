@@ -1,6 +1,5 @@
 """Obsidian MCP Server - Execute bash commands in Obsidian vaults."""
 
-import json
 import logging
 import sys
 from pathlib import Path
@@ -8,10 +7,8 @@ from mcp.server import Server
 from mcp.server.sse import SseServerTransport
 from mcp.types import Tool, TextContent
 from starlette.applications import Starlette
-from starlette.middleware import Middleware
-from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse, Response
+from starlette.responses import JSONResponse
 from starlette.routing import Mount, Route
 import uvicorn
 from config import init_config, get_config
@@ -169,6 +166,22 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
         )]
 
 
+def check_auth(request: Request) -> bool:
+    """Check if request is authorized."""
+    config = get_config()
+
+    if not config.mcp_auth_enabled:
+        return True
+
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+        if token == config.mcp_auth_token:
+            return True
+
+    return False
+
+
 async def health_check(request: Request) -> JSONResponse:
     """Health check endpoint."""
     config = get_config()
@@ -197,44 +210,18 @@ async def health_check(request: Request) -> JSONResponse:
     }, status_code=status_code)
 
 
-class AuthMiddleware(BaseHTTPMiddleware):
-    """Authentication middleware for MCP endpoints."""
-
-    async def dispatch(self, request: Request, call_next):
-        config = get_config()
-
-        # Skip auth for health check
-        if request.url.path == "/health":
-            return await call_next(request)
-
-        # Check if auth is enabled
-        if not config.mcp_auth_enabled:
-            return await call_next(request)
-
-        # Validate authorization header
-        auth_header = request.headers.get("Authorization", "")
-
-        if auth_header.startswith("Bearer "):
-            token = auth_header[7:]
-            if token == config.mcp_auth_token:
-                return await call_next(request)
-
-        logger.warning(f"Unauthorized access attempt from {request.client.host}")
-        return JSONResponse(
-            {"error": "Unauthorized"},
-            status_code=401
-        )
-
-
 def create_app() -> Starlette:
     """Create and configure the Starlette application."""
-    config = get_config()
-
     # Create SSE transport
     sse = SseServerTransport("/messages/")
 
-    async def handle_sse(request: Request) -> Response:
+    async def handle_sse(request: Request):
         """Handle SSE connections."""
+        # Check auth
+        if not check_auth(request):
+            logger.warning(f"Unauthorized access attempt from {request.client.host}")
+            return JSONResponse({"error": "Unauthorized"}, status_code=401)
+
         async with sse.connect_sse(
             request.scope,
             request.receive,
@@ -245,7 +232,6 @@ def create_app() -> Starlette:
                 streams[1],
                 mcp_server.create_initialization_options()
             )
-        return Response()
 
     # Create Starlette app with routes
     app = Starlette(
@@ -255,9 +241,6 @@ def create_app() -> Starlette:
             Route("/sse", endpoint=handle_sse, methods=["GET"]),
             Mount("/messages/", app=sse.handle_post_message),
         ],
-        middleware=[
-            Middleware(AuthMiddleware)
-        ]
     )
 
     return app
